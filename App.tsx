@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { FileSpreadsheet, Search, Bot, AlertCircle, Loader2, RefreshCw, Trash2 } from 'lucide-react';
+import { FileSpreadsheet, Search, Bot, AlertCircle, Loader2, RefreshCw, Trash2, Database, CheckCircle2 } from 'lucide-react';
 import FileUpload from './components/FileUpload';
 import { generateDataReport } from './services/geminiService';
+import { supabase } from './services/supabaseClient';
 import { CsvRow, ProcessingStatus } from './types';
 
 const App: React.FC = () => {
@@ -12,6 +13,10 @@ const App: React.FC = () => {
   const [report, setReport] = useState<string>("");
   const [status, setStatus] = useState<ProcessingStatus>(ProcessingStatus.IDLE);
   const [error, setError] = useState<string | null>(null);
+  
+  // Database saving states
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
 
   const handleDataParsed = useCallback((data: CsvRow[], name: string) => {
     setCsvData(data);
@@ -19,6 +24,7 @@ const App: React.FC = () => {
     setStatus(ProcessingStatus.IDLE);
     setError(null);
     setReport("");
+    setSaveStatus('idle');
   }, []);
 
   const handleFileUploadError = useCallback((msg: string) => {
@@ -33,7 +39,34 @@ const App: React.FC = () => {
     setReport("");
     setStatus(ProcessingStatus.IDLE);
     setError(null);
+    setSaveStatus('idle');
   }, []);
+
+  const saveToDatabase = async (currentQuery: string, result: string) => {
+    if (!supabase) {
+        console.warn("Supabase client not initialized. Skipping save.");
+        return;
+    }
+
+    setIsSaving(true);
+    setSaveStatus('idle');
+
+    try {
+      const { error } = await supabase.from('reports').insert({
+        file_name: fileName,
+        query: currentQuery,
+        report_content: result
+      });
+
+      if (error) throw error;
+      setSaveStatus('saved');
+    } catch (err) {
+      console.error("Failed to save to Supabase:", err);
+      setSaveStatus('error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,11 +75,16 @@ const App: React.FC = () => {
     setStatus(ProcessingStatus.ANALYZING);
     setError(null);
     setReport("");
+    setSaveStatus('idle');
 
     try {
       const result = await generateDataReport(csvData, query);
       setReport(result);
       setStatus(ProcessingStatus.COMPLETED);
+      
+      // Auto-save to Supabase
+      await saveToDatabase(query, result);
+
     } catch (err: any) {
       setError(err.message || "เกิดข้อผิดพลาดในการวิเคราะห์ข้อมูล");
       setStatus(ProcessingStatus.ERROR);
@@ -164,6 +202,27 @@ const App: React.FC = () => {
             {/* Right Column: Report */}
             <div className="lg:col-span-2">
               <div className="bg-white min-h-[500px] rounded-xl shadow-sm border border-gray-200 p-6 sm:p-8 relative">
+                {/* Status Bar for Database Save */}
+                {status === ProcessingStatus.COMPLETED && (
+                    <div className="absolute top-4 right-4 flex items-center gap-2 text-xs">
+                        {isSaving && (
+                            <span className="flex items-center gap-1 text-gray-500">
+                                <Loader2 className="w-3 h-3 animate-spin" /> Saving...
+                            </span>
+                        )}
+                        {!isSaving && saveStatus === 'saved' && (
+                            <span className="flex items-center gap-1 text-green-600 bg-green-50 px-2 py-1 rounded-full border border-green-100">
+                                <CheckCircle2 className="w-3 h-3" /> Saved to DB
+                            </span>
+                        )}
+                        {!isSaving && saveStatus === 'error' && (
+                             <span className="flex items-center gap-1 text-red-600 bg-red-50 px-2 py-1 rounded-full border border-red-100" title="Check console/environment variables">
+                                <Database className="w-3 h-3" /> Save Failed
+                            </span>
+                        )}
+                    </div>
+                )}
+
                 {status === ProcessingStatus.IDLE && !report && (
                    <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
                       <Bot className="w-16 h-16 mb-4 opacity-20" />
