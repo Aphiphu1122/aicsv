@@ -19,6 +19,7 @@ const App: React.FC = () => {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
 
   const handleDataParsed = useCallback((data: CsvRow[], name: string) => {
+    console.log(`File parsed: ${name}, Rows: ${data.length}`);
     setCsvData(data);
     setFileName(name);
     setStatus(ProcessingStatus.IDLE);
@@ -28,6 +29,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleFileUploadError = useCallback((msg: string) => {
+    console.error("File upload error:", msg);
     setError(msg);
     setStatus(ProcessingStatus.ERROR);
   }, []);
@@ -52,6 +54,7 @@ const App: React.FC = () => {
     setSaveStatus('idle');
 
     try {
+      console.log("Saving report to Supabase...");
       const { error } = await supabase.from('reports').insert({
         file_name: fileName,
         query: currentQuery,
@@ -59,6 +62,7 @@ const App: React.FC = () => {
       });
 
       if (error) throw error;
+      console.log("Saved to Supabase successfully.");
       setSaveStatus('saved');
     } catch (err) {
       console.error("Failed to save to Supabase:", err);
@@ -72,6 +76,7 @@ const App: React.FC = () => {
     e.preventDefault();
     if (!csvData || !query.trim()) return;
 
+    console.log("Starting analysis...");
     setStatus(ProcessingStatus.ANALYZING);
     setError(null);
     setReport("");
@@ -79,6 +84,7 @@ const App: React.FC = () => {
 
     try {
       const result = await generateDataReport(csvData, query);
+      console.log("Analysis completed.");
       setReport(result);
       setStatus(ProcessingStatus.COMPLETED);
       
@@ -86,6 +92,7 @@ const App: React.FC = () => {
       await saveToDatabase(query, result);
 
     } catch (err: any) {
+      console.error("Analysis failed in App:", err);
       setError(err.message || "เกิดข้อผิดพลาดในการวิเคราะห์ข้อมูล");
       setStatus(ProcessingStatus.ERROR);
     }
@@ -258,6 +265,7 @@ const App: React.FC = () => {
                         <RefreshCw className="w-10 h-10 text-indigo-600 animate-spin mb-4" />
                         <h3 className="text-lg font-semibold text-gray-800">Gemini กำลังทำงาน...</h3>
                         <p className="text-sm text-gray-500">กำลังอ่าน CSV และสร้างรายงานสรุป</p>
+                        <p className="text-xs text-gray-400 mt-2">(อาจใช้เวลา 5-10 วินาที)</p>
                     </div>
                 )}
               </div>
