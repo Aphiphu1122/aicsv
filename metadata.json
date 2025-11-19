@@ -1,0 +1,5 @@
+{
+  "name": "Copy of CSV Insight AI (Thai)",
+  "description": "Web application for uploading CSV data and generating Thai language insights/reports using Gemini 2.5 Flash.",
+  "requestFramePermissions": []
+}
